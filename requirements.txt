@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+google-cloud-speech
+google-cloud-storage
+python-decouple
+pydantic
+requests
+langchain
+langchain-openai
+python-multipart
+gunicorn

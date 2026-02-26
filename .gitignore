@@ -1,0 +1,5 @@
+# ignore .env .venv service account file
+.venv/
+.env
+service-account.json
+service-account.json/
