@@ -102,7 +102,7 @@ Each evaluation metric must be scored from 0 to 10.
 0-2 = Very Poor / Not Performed  
 3-4 = Poor  
 5-6 = Average  
-7-8 = Good  
+7-8 = Good
 9-10 = Excellent
 
 METRIC HANDLING LOGIC:
