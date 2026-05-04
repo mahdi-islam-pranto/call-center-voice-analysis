@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from fastapi import FastAPI, File, UploadFile
 import base64
+from typing import Literal, Optional
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -33,16 +34,23 @@ You are a professional transcription engine. Your only job is to convert spoken 
 Rules you must strictly follow:
 - Make a transcript of user audio file. Do not change or make up the transcript by your own. Make the actual transcript from the audio.
 - Do not add any commentary, explanation, or metadata. Output only the transcribed text.
-- If the audio is in Bangla, transcribe in Bangla. If the audio is in English, transcribe in English. Do not mix languages in the transcription.
+- If there is any language specified, transcribe in that language only and put it in the appropriate language field. Put nothing in the other language fields.
+- If no language is specified, transcribe in the original language of the audio, as default whether English or Bangla. The audio may contain a mix of both languages, so transcribe as it is without changing or making up any part of the transcript and put in in default field and put nothing in the other language fields.
+- If language is specified as "all", transcribe in both English and Bangla and put in the both language fields appropriately.
 """
 
 HUMAN_PROMPT = """
-Please transcribe the following audio file accurately.
+Please transcribe the following audio file accurately based on the specified language: {language}.
 """
+
+class TranscriptionLanguage(BaseModel):
+    english: str = Field(description="Transcripted text from the audio in English")
+    bangla: str = Field(description="Transcripted text from the audio in Bangla")
+    default: str = Field(description="Transcripted text from the audio in its original language, whether English or Bangla")
 
 # pydantic class for Output
 class TranscriptionOutput(BaseModel):
-    ai_response: str = Field(description="The transcribed text from the audio input")
+    ai_response: TranscriptionLanguage = Field(description="The transcribed text in English, Bangla, and default language")
     tokens_used: int = Field(description="Number of tokens used in the transcription process")
 
 
@@ -54,15 +62,20 @@ SUPPORTED_MIME_TYPES = {
 
 # API endpoints here
 @app.post("/transcribe", response_model=TranscriptionOutput)
-async def track_user_progress(input_file: UploadFile = File(...)):
+async def track_user_progress(
+    audio_file: UploadFile = File(..., description="The audio file to be transcribed"),
+    language: Optional[Literal["english", "bangla", "all"]] = Form(
+        None, 
+        description="The language of the audio file"
+    )):
     try:
         
         # Read and encode the audio file
-        audio_bytes = await input_file.read()
+        audio_bytes = await audio_file.read()
         audio_b64 = base64.standard_b64encode(audio_bytes).decode("utf-8")
 
         # Determine MIME type
-        mime_type = input_file.content_type or "audio/mpeg"
+        mime_type = audio_file.content_type or "audio/mpeg"
         if mime_type not in SUPPORTED_MIME_TYPES:
             mime_type = "audio/mpeg"  # Fallback default
 
@@ -78,7 +91,7 @@ async def track_user_progress(input_file: UploadFile = File(...)):
                 },
                 {
                     "type": "text",
-                    "text": HUMAN_PROMPT,
+                    "text": HUMAN_PROMPT.format(language=language),
                 },
             ]),
         ]
