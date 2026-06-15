@@ -3,3 +3,6 @@
 .env
 service-account.json
 service-account.json/
+
+# ignore all .mp3 files
+*.mp3
