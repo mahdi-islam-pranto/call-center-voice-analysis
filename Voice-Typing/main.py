@@ -35,8 +35,7 @@ Rules you must strictly follow:
 - Make a transcript of user audio file. Do not change or make up the transcript by your own. Make the actual transcript from the audio.
 - Do not add any commentary, explanation, or metadata. Output only the transcribed text.
 - If there is any language specified, transcribe in that language only and put it in the appropriate language field. Put nothing in the other language fields.
-- If no language is specified, transcribe in the original language of the audio, as default whether English or Bangla. The audio may contain a mix of both languages, so transcribe as it is without changing or making up any part of the transcript and put in in default field and put nothing in the other language fields.
-- If language is specified as "all", transcribe in both English and Bangla and put in the both language fields appropriately.
+- If no language is specified or is set to "default", transcribe in the original language of the audio, as default whether English or Bangla. The audio may contain a mix of both languages, so transcribe as it is without changing or making up any part of the transcript and put in in default field and put nothing in the other language fields.
 """
 
 HUMAN_PROMPT = """
@@ -64,7 +63,7 @@ SUPPORTED_MIME_TYPES = {
 @app.post("/transcribe", response_model=TranscriptionOutput)
 async def track_user_progress(
     audio_file: UploadFile = File(..., description="The audio file to be transcribed"),
-    language: Optional[Literal["english", "bangla", "all"]] = Form(
+    language: Optional[Literal["english", "bangla", "default"]] = Form(
         None, 
         description="The language of the audio file"
     )):
