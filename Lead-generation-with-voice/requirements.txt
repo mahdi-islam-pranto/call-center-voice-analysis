@@ -5,3 +5,5 @@ langchain
 langchain-core
 python-dotenv
 uvicorn
+streamlit 
+requests

@@ -196,12 +196,12 @@ async def find_potential_lead(request: PotentialLeadRequest) -> PotentialLeadRes
 
 # download_audio(audio_url)
 
-# strong lead, price discussion
+# test (strong lead, price discussion)
 # https://103.204.81.3/RECORDINGS/MP3/20260615-100751_FEDEX_TN_FEDEX_louis_8801862901607-all.mp3
 
-# not a lead, irelevant query
+# test (not a lead, irelevant query)
 # https://103.204.81.3/RECORDINGS/MP3/20260615-091435_FEDEX_TN__louis_01712174109-all.mp3
 
-# not a lead, traking delivery status
+# test (not a lead, traking delivery status)
 # https://103.204.81.3/RECORDINGS/MP3/20260615-101255_FEDEX_TN_FEDEX_IMPORT_bijoy_8801923430572-all.mp3
 
