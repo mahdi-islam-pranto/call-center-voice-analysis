@@ -10,7 +10,8 @@ import glob
 # Transcribe long audio file using Chirp model
 def transcribe_long_audio(gcs_uri, bucket_name, u_audio_name):
     # Set the correct region for Chirp_2 (e.g., "us" or "eu")
-    location = "us-central1"  # Use "eu" for European Union
+    # location = "us-central1"  # Use "eu" for European Union
+    location = "us"
 
     # Initialize the client with the REGIONAL ENDPOINT
     client = speech.SpeechClient.from_service_account_file(
@@ -19,7 +20,7 @@ def transcribe_long_audio(gcs_uri, bucket_name, u_audio_name):
     )
     
     project_id = "woven-century-448009-r7"
-    recognizer_id = "bangla-recognizer-2"
+    recognizer_id = "bangla-global-rec"
     parent = f"projects/{project_id}/locations/{location}"
     recognizer_name = f"{parent}/recognizers/{recognizer_id}"
     
@@ -33,7 +34,7 @@ def transcribe_long_audio(gcs_uri, bucket_name, u_audio_name):
                 recognizer_id=recognizer_id,
                 recognizer={
                     "language_codes": ["bn-BD"],
-                    "model": "chirp_2",
+                    "model": "chirp_3",
                     "default_recognition_config": {
                         "auto_decoding_config": {},
                         "features": {
@@ -58,7 +59,7 @@ def transcribe_long_audio(gcs_uri, bucket_name, u_audio_name):
             config=cloud_speech.RecognitionConfig(
                 auto_decoding_config={},
                 language_codes=["bn-BD"],
-                model="chirp_2",
+                model="chirp_3",
                 features=cloud_speech.RecognitionFeatures(
                     enable_automatic_punctuation=True,
                     enable_word_time_offsets=True,

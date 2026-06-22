@@ -8,11 +8,18 @@ from fastapi import FastAPI, Query, Form, File, UploadFile
 from process_single_audio import process_single_audio
 from pydantic import Field
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+# from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from decouple import config
+from dotenv import load_dotenv
+load_dotenv()
 
-SECRET_KEY = config('OPENAI_API_KEY')
-model = ChatOpenAI(model="gpt-4o-mini", openai_api_key=SECRET_KEY)
+
+# SECRET_KEY = config('OPENAI_API_KEY')
+# model = ChatOpenAI(model="gpt-4o-mini", openai_api_key=SECRET_KEY)
+model = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
+)
 
 # pydantic class for API input
 class TranscriptionRequest(BaseModel):
@@ -80,6 +87,8 @@ async def api(request: TranscriptionRequest):
     
     # wait for all tasks to complete
     transcriptions_results = await asyncio.gather(*tasks)
+    
+    print(f" full transcript {transcriptions_results}")
     
     # generate agent performance code
     system_prompt = """
@@ -207,7 +216,7 @@ Instructions:
     return {
         "agent_performance": agent_performance,
         "transcript_bearer": "Google Cloud Speech-to-Text",
-        "summary_bearer": "Open AI",
+        "summary_bearer": "Open AI / Gemini",
     }
     
     

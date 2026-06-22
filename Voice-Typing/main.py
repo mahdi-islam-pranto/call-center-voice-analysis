@@ -27,7 +27,6 @@ app.add_middleware(
 )
 
 
-
 SYSTEM_PROMPT = """
 You are a professional transcription engine. Your only job is to convert spoken audio into written text with maximum accuracy.
 
