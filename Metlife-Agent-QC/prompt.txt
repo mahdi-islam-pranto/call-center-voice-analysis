@@ -1,0 +1,85 @@
+I want to make a Agent Quality Check project where AI will take a perticular call center agent's call recording and analyze the full call recording and give marks on cirtain matrics or criteria. Seeing those marks we can check the agent's call quality.
+I want to use gemini-2.5-flash-lite as it can take audio with text and it is multimodal. I want to use langchain and langraph(if needed) for this project. The call recording can be both in Bangla and English. There will be an API which will connect with this project. I want to use FastAPI here. 
+The input of the API will be a single audio. The outputs will be All the marks of each criteria with a short justification and total marks gain and the percentage of the call recording and if the agent needs counselling or not. Each criteria or matric has 5 marks. AI will score between 0 to 5 and give total marks gain and total marks percentage. 
+
+
+Here are all the criteria/matrices and agent's call script.
+Here are All the criterias/parameters and how will they masure on marking on each criteria:
+
+1. Greetings
+In an outbound call, when the TSR initiates the call and the recipient answers, the TSR should deliver the standard opening greeting as per the approved script, such as:
+“Hello, Assalamu Alaikum/Good Morning/Adab, metlife ar call center theke afroza bolchi”
+Evaluation is based on whether the TSR delivers the opening statement correctly, clearly, and professionally according to the script.
+
+
+2. Caller Authentication
+This parameter evaluates whether the TSR properly verifies the identity of the policyholder/applicant before proceeding with the call. This may include:
+- Confirming the policy owner’s name
+- Verifying the date of birth
+- Confirming the registered address or other identification details
+Marking is based on accurate and complete authentication as required by the script.
+
+
+3. Telephony Etiquette
+This parameter assesses the TSR’s communication skills and professionalism, including:
+- Maintaining a polite and courteous tone
+- Demonstrating good manners
+- Showing respect toward the customer
+- Communicating professionally throughout the call
+
+
+4. Pronunciation
+This parameter evaluates the TSR’s clarity of speech and pronunciation. Marking is based on:
+- Use of standard Bangla
+- Clear and understandable speech
+- Absence of excessive regional accent influence
+- No noticeable stammering or speech difficulties that may affect communication
+
+
+5. Script Following
+This parameter measures whether the TSR follows the approved script correctly and in the required sequence. All sections of the script should be delivered in the proper order without omitting any mandatory components.
+
+
+6. Handling Time
+This parameter evaluates the TSR’s efficiency in managing the call. Marking is based on:
+- Providing information promptly
+- Responding to customer queries effectively
+- Resolving issues within an appropriate timeframe
+- Maintaining a reasonable call duration without unnecessary delays
+
+
+7. Complaint Handling
+This parameter assesses how the TSR handles customer concerns, disagreements, or complaints. Examples include:
+- Customer disagreement with provided information
+- Mismatch in customer records or details
+- Customer complaints regarding services or policies
+The TSR should handle such situations professionally, patiently, empathetically, and in a solution-oriented manner.
+
+
+8. Attentiveness / Focus
+This parameter evaluates the TSR’s level of engagement and attentiveness during the call. Marking is based on:
+- Active listening skills
+- Ability to stay focused throughout the conversation
+- Prompt and relevant responses
+- Energetic and enthusiastic communication
+
+
+9. Closing
+
+This parameter assesses whether the TSR concludes the call according to the approved closing script, such as:
+“Thank you for staying with MetLife. Have a wonderful and secure day.”
+Marking is based on whether the TSR ends the call politely, professionally, and in compliance with the prescribed closing procedure.
+
+You will make a proper prompt so that AI marks the agent's call recording realistically and doesn't make any mistakes. 
+
+
+
+Besides I am giving you a call recording of a agent and his marking, given by a human Qualily checker. 
+Agent Sanjida:
+recording:
+
+Makrs:
+Parameters:
+"Calling Date",	"Caller Number",	"Policy Number(s)",	"TSRName",	GEID,	IB/OB,	Greetings,	"Caller Authentication",	"Telephony Etiquette ",	Pronunciation, 	Script Following,	"Handling Time", "Complaint Handling",	Attentiveness/Focus,	Closing	Call, Rating,	Total,	"Agent Counselling",	Remarks, QA
+Marks:
+Mon May 04 2026 06:00:00 GMT+0600 (Bangladesh Standard Time), 01938784711, 10441298, SUNJIDA KEYA,	3636549,	Outbound,	5,	5,	4,	5,	5,	4,	5,	4,	5,	=Q2/45=0.93%,	=SUM(G2:O2)=42, No, Null, Priyanka Islam
