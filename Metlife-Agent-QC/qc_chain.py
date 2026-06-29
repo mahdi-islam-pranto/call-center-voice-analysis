@@ -1,10 +1,3 @@
-"""
-aqc_chain.py - LangChain chain for Agent Quality Check using Gemini 2.5 Flash Lite.
-
-Sends the audio directly to Gemini (multimodal) along with a detailed system prompt
-and evaluation rubric. Parses the structured JSON response into a QualityCheckResult.
-"""
-
 import os
 import json
 import re
@@ -15,6 +8,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
+from dotenv import load_dotenv
+load_dotenv()
 
 # define Pydantic models for output
 
@@ -35,7 +30,7 @@ class QualityCheckResult(BaseModel):
     needs_counselling: bool
     counselling_reason: str | None = None
     overall_summary: str
-
+    usage_metadata: Any
 
 
 # System prompt / evaluation rubric
@@ -337,7 +332,7 @@ async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -
 
     # Build the LangChain message with inline audio
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite-preview-06-17",
+        model="gemini-2.5-flash-lite",
         google_api_key=api_key,
         temperature=0.1,
     )
@@ -368,6 +363,10 @@ async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -
 
     # Invoke the model
     response = await llm.ainvoke([system_message, human_message])
+    
+    # Get llm usage metadata
+    usage_metadata = response.usage_metadata
+    print(f"usage metada: {usage_metadata}")
 
     # Extract raw text
     raw_text = response.content if isinstance(response.content, str) else str(response.content)
@@ -403,7 +402,8 @@ async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -
 
     # Counselling check: below 75% OR any score is 0 or 1
     needs_counselling = percentage < 75.0 or any(cs.score <= 1 for cs in criteria_scores)
-
+    
+    
     return QualityCheckResult(
         agent_name=data.get("agent_name"),
         call_duration_note=data.get("call_duration_note"),
@@ -414,4 +414,5 @@ async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -
         needs_counselling=needs_counselling,
         counselling_reason=data.get("counselling_reason") if needs_counselling else None,
         overall_summary=data.get("overall_summary", ""),
+        usage_metadata=usage_metadata
     )
