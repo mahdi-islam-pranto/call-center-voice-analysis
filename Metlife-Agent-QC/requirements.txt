@@ -5,3 +5,9 @@ langchain
 langchain-core
 python-dotenv
 uvicorn
+
+# frontend - reqirements
+streamlit
+requests
+plotly
+pandas
