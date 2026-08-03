@@ -128,3 +128,6 @@ async def track_user_progress(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+    

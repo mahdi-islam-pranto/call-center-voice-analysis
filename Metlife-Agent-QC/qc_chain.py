@@ -1,39 +1,66 @@
 import os
-import json
-import re
 import base64
-from typing import Any
+from typing import Any, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 load_dotenv()
 
-# define Pydantic models for output
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
 
 class CriteriaScore(BaseModel):
-    name: str
-    score: int
-    max_score: int = 5
-    justification: str
+    name: str = Field(description="Name of the evaluation criterion, e.g. 'Greetings'.")
+    score: int = Field(ge=0, le=5, description="Score for this criterion, 0-5.")
+    max_score: int = Field(default=5, description="Maximum possible score, always 5.")
+    justification: str = Field(
+        description="1-3 sentence explanation in English citing specific evidence from the call."
+    )
 
 
+class QualityCheckLLMOutput(BaseModel):
+    """
+    This is exactly what we ask Gemini to produce. Totals/percentage/
+    needs_counselling are deliberately NOT trusted from the model - we
+    compute them ourselves afterwards for consistency and to avoid
+    arithmetic mistakes creeping into the graded output.
+    """
+    agent_name: Optional[str] = Field(
+        default=None, description="Detected agent/TSR name, or null if not identifiable."
+    )
+    call_duration_note: Optional[str] = Field(
+        default=None, description="Brief note on call length, e.g. 'Approximately 4 minutes'."
+    )
+    criteria_scores: list[CriteriaScore] = Field(
+        description="Exactly 9 entries, one per evaluation criterion, in the fixed order: "
+        "Greetings, Caller Authentication, Telephony Etiquette, Pronunciation, "
+        "Script Following, Handling Time, Complaint Handling, Attentiveness / Focus, Closing."
+    )
+    overall_summary: str = Field(
+        description="2-4 sentence professional summary of the agent's call quality performance."
+    )
+
+
+# output schema
 class QualityCheckResult(BaseModel):
-    agent_name: str | None = None
-    call_duration_note: str | None = None
+    agent_name: Optional[str] = None
+    call_duration_note: Optional[str] = None
     criteria_scores: list[CriteriaScore]
     total_marks_obtained: int
     total_marks_possible: int
     percentage: float
     needs_counselling: bool
-    counselling_reason: str | None = None
+    counselling_reason: Optional[str] = None
     overall_summary: str
     usage_metadata: Any
 
 
+# ---------------------------------------------------------------------------
 # System prompt / evaluation rubric
+# ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """
 You are an expert **Call Quality Analyst** for MetLife Bangladesh's call center.
@@ -241,87 +268,22 @@ Evaluate whether the TSR closes the call according to the approved script:
 
 ---
 
-## COUNSELLING THRESHOLD
-If the agent's **total percentage is below 75%** OR if they score **0 or 1** on 
-any single criterion, recommend counselling (needs_counselling = true).
-
----
-
-## RESPONSE FORMAT
-Respond ONLY with a valid JSON object. No markdown, no extra text. Use this exact structure:
-
-{
-  "agent_name": "<detected agent name or null>",
-  "call_duration_note": "<brief note on call length, e.g. 'Approximately 4 minutes'>",
-  "criteria_scores": [
-    {
-      "name": "Greetings",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "<1-3 sentence explanation in English citing specific evidence from the call>"
-    },
-    {
-      "name": "Caller Authentication",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    },
-    {
-      "name": "Telephony Etiquette",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    },
-    {
-      "name": "Pronunciation",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    },
-    {
-      "name": "Script Following",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    },
-    {
-      "name": "Handling Time",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    },
-    {
-      "name": "Complaint Handling",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    },
-    {
-      "name": "Attentiveness / Focus",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    },
-    {
-      "name": "Closing",
-      "score": <0-5>,
-      "max_score": 5,
-      "justification": "..."
-    }
-  ],
-  "total_marks_obtained": <sum of all 9 scores>,
-  "total_marks_possible": 45,
-  "percentage": <(total_marks_obtained / 45) * 100, rounded to 2 decimal places>,
-  "needs_counselling": <true if percentage < 75 OR any single score is 0 or 1, else false>,
-  "counselling_reason": "<if needs_counselling is true, briefly explain why; else null>",
-  "overall_summary": "<2-4 sentence professional summary of the agent's call quality performance>"
-}
+## OUTPUT INSTRUCTIONS
+You must return your evaluation using the structured schema provided to you
+(`QualityCheckLLMOutput`). Provide exactly 9 entries in `criteria_scores`, in
+the fixed order listed above (Greetings, Caller Authentication, Telephony
+Etiquette, Pronunciation, Script Following, Handling Time, Complaint
+Handling, Attentiveness / Focus, Closing). Do NOT compute totals, percentage,
+or a counselling recommendation yourself — that is handled outside the model.
+Be objective and realistic: base every score strictly on what you actually
+hear in the recording. Do not assume anything you did not hear.
 """
 
 
 async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -> QualityCheckResult:
     """
-    Send the audio file to Gemini parse the quality check result.
+    Send the audio file to Gemini and get back a validated QualityCheckLLMOutput
+    via structured output.
     """
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
@@ -330,12 +292,17 @@ async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -
     # Encode audio to base64 for the inline data part
     audio_b64 = base64.standard_b64encode(audio_bytes).decode("utf-8")
 
-    # Build the LangChain message with inline audio
+    # Build the LangChain model
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
+        model="gemini-3.1-flash-lite",
         google_api_key=api_key,
         temperature=0.1,
     )
+
+    # Bind the Pydantic schema -> Gemini will be constrained to return this shape.
+    # `include_raw=True` lets us keep access to the raw AIMessage (for usage_metadata)
+    # alongside the parsed object.
+    structured_llm = llm.with_structured_output(QualityCheckLLMOutput, include_raw=True)
 
     # define human/user prompt
     human_message = HumanMessage(
@@ -348,11 +315,8 @@ async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -
             {
                 "type": "text",
                 "text": (
-                    "Please listen to this call recording carefully and evaluate the agent's performance "
-                    "according to the 9 quality criteria in your instructions. "
-                    "Be objective and realistic — base every score strictly on what you actually hear in the recording. "
-                    "Do not assume anything you did not hear. "
-                    "Respond ONLY with the JSON object as specified."
+                    "Please listen to this call recording carefully and evaluate the agent's "
+                    "performance according to the 9 quality criteria in your instructions."
                 ),
             },
         ]
@@ -361,58 +325,64 @@ async def run_quality_check(audio_bytes: bytes, mime_type: str = "audio/mpeg") -
     # define system message
     system_message = SystemMessage(content=SYSTEM_PROMPT)
 
-    # Invoke the model
-    response = await llm.ainvoke([system_message, human_message])
-    
-    # Get llm usage metadata
-    usage_metadata = response.usage_metadata
-    print(f"usage metada: {usage_metadata}")
+    # Invoke the model - returns {"raw": AIMessage, "parsed": QualityCheckLLMOutput | None, "parsing_error": ...}
+    result = await structured_llm.ainvoke([system_message, human_message])
 
-    # Extract raw text
-    raw_text = response.content if isinstance(response.content, str) else str(response.content)
+    raw_message = result["raw"]
+    parsed: QualityCheckLLMOutput | None = result["parsed"]
+    parsing_error = result.get("parsing_error")
 
-    # Strip markdown fences if present
-    raw_text = re.sub(r"```(?:json)?\s*", "", raw_text).strip()
-    raw_text = re.sub(r"```\s*$", "", raw_text).strip()
+    usage_metadata = getattr(raw_message, "usage_metadata", None)
+    print(f"usage metadata: {usage_metadata}")
 
-    # Parse JSON
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to parse Gemini response as JSON: {e}\nRaw response:\n{raw_text[:500]}")
-
-    # Validate and compute totals
-    criteria_scores = []
-    total_obtained = 0
-
-    for item in data.get("criteria_scores", []):
-        score = max(0, min(5, int(item.get("score", 0))))
-        total_obtained += score
-        criteria_scores.append(
-            CriteriaScore(
-                name=item["name"],
-                score=score,
-                max_score=5,
-                justification=item.get("justification", ""),
-            )
+    if parsed is None:
+        raise ValueError(
+            f"Gemini did not return a schema-conformant response. "
+            f"parsing_error={parsing_error!r}, raw_content={raw_message.content!r}"
         )
 
+    print(f"parsed structured output: {parsed.model_dump()}")
+
+    # ------------------------------------------------------------------
+    # Compute totals / percentage / counselling flag ourselves - do not
+    # trust the model to do arithmetic correctly.
+    # ------------------------------------------------------------------
+    criteria_scores = [
+        CriteriaScore(
+            name=cs.name,
+            score=max(0, min(5, cs.score)),
+            max_score=5,
+            justification=cs.justification,
+        )
+        for cs in parsed.criteria_scores
+    ]
+
+    total_obtained = sum(cs.score for cs in criteria_scores)
     total_possible = 45
     percentage = round((total_obtained / total_possible) * 100, 2)
 
     # Counselling check: below 75% OR any score is 0 or 1
     needs_counselling = percentage < 75.0 or any(cs.score <= 1 for cs in criteria_scores)
-    
-    
+
+    counselling_reason = None
+    if needs_counselling:
+        low_scoring = [cs.name for cs in criteria_scores if cs.score <= 1]
+        reasons = []
+        if percentage < 75.0:
+            reasons.append(f"overall score of {percentage}% is below the 75% threshold")
+        if low_scoring:
+            reasons.append(f"critically low score(s) (0-1) on: {', '.join(low_scoring)}")
+        counselling_reason = "; ".join(reasons).capitalize() + "."
+
     return QualityCheckResult(
-        agent_name=data.get("agent_name"),
-        call_duration_note=data.get("call_duration_note"),
+        agent_name=parsed.agent_name,
+        call_duration_note=parsed.call_duration_note,
         criteria_scores=criteria_scores,
         total_marks_obtained=total_obtained,
         total_marks_possible=total_possible,
         percentage=percentage,
         needs_counselling=needs_counselling,
-        counselling_reason=data.get("counselling_reason") if needs_counselling else None,
-        overall_summary=data.get("overall_summary", ""),
-        usage_metadata=usage_metadata
+        counselling_reason=counselling_reason,
+        overall_summary=parsed.overall_summary,
+        usage_metadata=usage_metadata,
     )
