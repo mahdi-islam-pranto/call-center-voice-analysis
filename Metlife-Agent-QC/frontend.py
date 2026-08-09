@@ -846,7 +846,7 @@ with tab_about:
     st.markdown("""
     <div class="summary-box" style="font-size:0.88rem;line-height:2;">
         <b style="color:#00A8E8;font-size:1rem;">Agent Quality Check (AQC) System</b><br><br>
-        This tool uses <b style="color:#C8D8E8;">Gemini 2.5 Flash Lite</b> (multimodal AI) to analyze MetLife Bangladesh
+        This tool uses <b style="color:#C8D8E8;">Multimodal AI</b> to analyze MetLife Bangladesh
         call center agent recordings and score them against <b style="color:#C8D8E8;">9 quality criteria</b>.<br><br>
 
         <b style="color:#C8D8E8;">How to use:</b><br>

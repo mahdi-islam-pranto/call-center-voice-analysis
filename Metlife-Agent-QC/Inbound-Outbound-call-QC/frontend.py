@@ -76,20 +76,57 @@ st.markdown("""
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .stApp { background-color: #0D1B2A; color: #E8F0F7; }
 
+/* ── Top toolbar/header (was showing as a plain white bar) ── */
+header[data-testid="stHeader"] {
+    background: #0D1B2A !important;
+}
+header[data-testid="stHeader"] * { color: #C8D8E8 !important; fill: #C8D8E8 !important; }
+[data-testid="stToolbar"] { background: transparent !important; }
+[data-testid="stDecoration"] { background: #00A8E8 !important; }
+#MainMenu { visibility: hidden; }
+
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #0A1628 0%, #1E3A5F 100%);
     border-right: 1px solid #1E3A5F;
 }
 [data-testid="stSidebar"] * { color: #C8D8E8 !important; }
-[data-testid="stSidebar"] .stButton button {
+
+/* ── Buttons everywhere (sidebar AND main area — Previous/Next/Download etc.) ── */
+.stButton button, .stDownloadButton button {
     background: #00A8E8 !important; color: #fff !important; border: none !important;
     font-weight: 600 !important; border-radius: 8px !important; padding: 0.5rem 1rem !important;
     width: 100%;
 }
-[data-testid="stSidebar"] .stButton button:hover {
+.stButton button:hover, .stDownloadButton button:hover {
     background: #0090CC !important; transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0,168,232,0.3) !important;
 }
+.stButton button:disabled {
+    background: #1E3A5F !important; color: #5A7DA0 !important; opacity: 1 !important;
+    box-shadow: none !important;
+}
+
+/* ── Selectbox / dropdown popovers (were defaulting to light theme) ── */
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+    background: #162B45 !important; color: #E8F0F7 !important; border-color: #2A4F7C !important;
+}
+div[data-baseweb="popover"] ul, div[data-baseweb="menu"] {
+    background: #162B45 !important; color: #E8F0F7 !important;
+}
+div[data-baseweb="popover"] li:hover { background: #1E3A5F !important; }
+
+/* ── Dataframe / table (batch overview) ── */
+[data-testid="stDataFrame"] { background: #162B45 !important; border-radius: 8px; }
+[data-testid="stDataFrame"] * { color: #E8F0F7 !important; }
+[data-testid="stElementToolbar"] { background: transparent !important; }
+
+/* ── Metrics ── */
+[data-testid="stMetric"] { background: #162B45; border: 1px solid #2A4F7C; border-radius: 8px; padding: 0.6rem 0.9rem; }
+[data-testid="stMetricValue"] { color: #FFFFFF !important; }
+[data-testid="stMetricLabel"] { color: #7BAFD4 !important; }
+
+/* ── Checkbox/radio labels in main area ── */
+.stCheckbox, .stRadio { color: #C8D8E8 !important; }
 
 .aqc-header {
     background: linear-gradient(135deg, #1E3A5F 0%, #0D2847 100%);
@@ -496,7 +533,7 @@ st.markdown(f"""
 
 entries = st.session_state.batch_results
 
-tab_review, tab_overview, tab_about = st.tabs(["🔍 Review Calls", "📊 Batch Overview", "ℹ️ About"])
+tab_review, tab_overview = st.tabs(["🔍 Review Calls", "📊 Batch Overview"])
 
 # ── TAB: REVIEW ──────────────────────────────
 with tab_review:
@@ -557,19 +594,42 @@ with tab_overview:
         st.plotly_chart(make_overview_bar(entries), use_container_width=True, key="overview_bar")
 
         st.markdown('<div class="section-label">Full Batch Table</div>', unsafe_allow_html=True)
+
+        def rating_label(pct: float) -> str:
+            if pct >= 90:
+                return "🟢 Excellent"
+            if pct >= 75:
+                return "🟢 Good"
+            if pct >= 60:
+                return "🟡 Fair"
+            return "🔴 Poor"
+
+        # Union of every criterion name seen across the batch, in the order each
+        # call type defines them — handles a batch that mixes inbound + outbound.
+        all_criteria = []
+        for cfg in CALL_TYPES.values():
+            for c in cfg["criteria_order"]:
+                if c not in all_criteria:
+                    all_criteria.append(c)
+
         rows = []
         for e in entries:
             r = e["result"]
-            rows.append({
+            criteria_map = {cs["name"]: cs["score"] for cs in r["criteria_scores"]}
+            row = {
                 "File": e["filename"],
                 "Call Type": CALL_TYPES[e["call_type"]]["label"],
                 "Agent": r.get("agent_name") or "Unknown",
-                "Score %": r["percentage"],
-                "Marks": f"{r['total_marks_obtained']}/{r['total_marks_possible']}",
-                "Counselling": "⚠ Required" if r["needs_counselling"] else "✓ Not Needed",
-                "Low Confidence": "🔍 Yes" if r.get("low_confidence_flag") else "—",
-                "Analyzed At": e["timestamp"],
-            })
+            }
+            for c in all_criteria:
+                row[c] = criteria_map.get(c, "—")
+            row["Total Marks"] = f"{r['total_marks_obtained']}/{r['total_marks_possible']}"
+            row["Score %"] = r["percentage"]
+            row["Call Rating"] = rating_label(r["percentage"])
+            row["Counselling"] = "⚠ Required" if r["needs_counselling"] else "✓ Not Needed"
+            row["Low Confidence"] = "🔍 Yes" if r.get("low_confidence_flag") else "—"
+            row["Analyzed At"] = e["timestamp"]
+            rows.append(row)
         df = pd.DataFrame(rows)
 
         def style_pct(val):
@@ -579,8 +639,24 @@ with tab_overview:
             except Exception:
                 return ""
 
-        styled = df.style.apply(lambda col: [style_pct(v) for v in col], subset=["Score %"])
+        def style_criterion(val):
+            try:
+                v = int(val)
+                return f"color:{SCORE_COLORS.get(v, '#C8D8E8')};font-weight:600"
+            except Exception:
+                return "color:#5A7DA0"
+
+        styled = (
+            df.style
+            .apply(lambda col: [style_pct(v) for v in col], subset=["Score %"])
+            .apply(lambda col: [style_criterion(v) for v in col], subset=all_criteria)
+        )
         st.dataframe(styled, use_container_width=True, hide_index=True)
+        st.caption(
+            "Criterion columns show that call type's actual 0–5 score, or '—' if that "
+            "criterion doesn't apply to the call type (e.g. inbound-only criteria for an "
+            "outbound call)."
+        )
 
         n_flagged = sum(1 for e in entries if e["result"]["needs_counselling"])
         m1, m2, m3 = st.columns(3)
@@ -596,40 +672,3 @@ with tab_overview:
         st.download_button("⬇ Download Batch Results (CSV)", data=csv,
                             file_name=f"aqc_batch_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                             mime="text/csv")
-
-# ── TAB: ABOUT ───────────────────────────────
-with tab_about:
-    ob = CALL_TYPES["outbound"]
-    ib = CALL_TYPES["inbound"]
-    st.markdown(f"""
-    <div class="summary-box" style="font-size:0.88rem;line-height:2;">
-        <b style="color:#00A8E8;font-size:1rem;">Agent Quality Check (AQC) System</b><br><br>
-        This tool uses <b style="color:#C8D8E8;">Gemini</b> (multimodal AI) to analyze MetLife Bangladesh
-        call center recordings for both <b style="color:#C8D8E8;">Pre-Issuance (Outbound)</b> and
-        <b style="color:#C8D8E8;">Inbound</b> calls.<br><br>
-
-        <b style="color:#C8D8E8;">How to use:</b><br>
-        1. Choose the call type in the sidebar — Pre-Issuance or Inbound<br>
-        2. Upload one or more recordings (you can select many files at once)<br>
-        3. Click <b>Analyze All</b> — recordings are processed one by one against the backend<br>
-        4. Use <b>🔍 Review Calls</b> to read each evaluation in full, with evidence per score<br>
-        5. Use <b>📊 Batch Overview</b> to see every recording's result together, and export as CSV<br><br>
-
-        <b style="color:#C8D8E8;">Pre-Issuance criteria ({len(ob['criteria_order'])}, {ob['max_total']} marks):</b><br>
-        {" &nbsp;·&nbsp; ".join(f"{ob['icons'].get(c,'')} {c}" for c in ob['criteria_order'])}<br><br>
-
-        <b style="color:#C8D8E8;">Inbound criteria ({len(ib['criteria_order'])}, {ib['max_total']} marks):</b><br>
-        {" &nbsp;·&nbsp; ".join(f"{ib['icons'].get(c,'')} {c}" for c in ib['criteria_order'])}<br><br>
-
-        <b style="color:#C8D8E8;">Counselling Threshold:</b><br>
-        An agent is flagged for counselling if their total score is <b style="color:#FF6B6B;">below 75%</b>
-        or if any single criterion scores <b style="color:#FF6B6B;">0 or 1</b>.<br><br>
-
-        <b style="color:#C8D8E8;">Reliability flags to watch for:</b><br>
-        🔍 <b>Low Confidence</b> — audio quality or cross-talk made a score hard to judge; verify manually.<br>
-        ⚖️ <b>Score Variance</b> — with the double-check option on, the two passes disagreed by 2+ points on
-        some criterion; verify manually.<br><br>
-
-        <b style="color:#C8D8E8;">Language Support:</b> Bangla 🇧🇩, English 🇬🇧, or mixed — the AI handles both natively.
-    </div>
-    """, unsafe_allow_html=True)
