@@ -19,6 +19,7 @@ The Recording Analysis API analyzes sales call recordings using AI (Gemini) to e
 Returns the health status of the API.
 
 **Response:**
+
 ```json
 {
   "status": "ok"
@@ -39,15 +40,15 @@ Analyzes a sales call recording and returns structured analysis including summar
 
 #### Request Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `audio_file` | File (binary) | Yes | The call recording file. Supported formats: mp3, wav, ogg, m4a, and other common audio formats. **Max size: 200MB** |
-| `language` | String (enum) | Yes | Output language for the analysis. Valid values: `"bn"` (Bangla) or `"en"` (English) |
-| `agent_name` | String | No | Name of the sales agent on the call |
-| `customer_name` | String | No | Name of the customer on the call |
-| `call_direction` | String (enum) | No | Direction of the call. Valid values: `"outbound"` or `"inbound"` |
-| `deal_or_lead_id` | String | No | CRM deal or lead reference ID |
-| `product_or_service` | String | No | Product or service this call relates to |
+| Parameter              | Type          | Required | Description                                                                                                              |
+| ---------------------- | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `audio_file`         | File (binary) | Yes      | The call recording file. Supported formats: mp3, wav, ogg, m4a, and other common audio formats.**Max size: 200MB** |
+| `language`           | String (enum) | Yes      | Output language for the analysis. Valid values:`"bn"` (Bangla) or `"en"` (English)                                   |
+| `agent_name`         | String        | No       | Name of the sales agent on the call                                                                                      |
+| `customer_name`      | String        | No       | Name of the customer on the call                                                                                         |
+| `call_direction`     | String (enum) | No       | Direction of the call. Valid values:`"outbound"` or `"inbound"`                                                      |
+| `deal_or_lead_id`    | String        | No       | CRM deal or lead reference ID                                                                                            |
+| `product_or_service` | String        | No       | Product or service this call relates to                                                                                  |
 
 #### Example Request
 
@@ -115,36 +116,36 @@ curl -X POST "http://localhost:8000/crm/analyze-call" \
 
 #### Response Schema
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `language` | String (`"bn"` or `"en"`) | The output language used for the analysis |
-| `analysis` | Object | The structured call analysis (see below) |
-| `token_usage` | Object or null | Token usage statistics for the request |
+| Field           | Type                          | Description                               |
+| --------------- | ----------------------------- | ----------------------------------------- |
+| `language`    | String (`"bn"` or `"en"`) | The output language used for the analysis |
+| `analysis`    | Object                        | The structured call analysis (see below)  |
+| `token_usage` | Object or null                | Token usage statistics for the request    |
 
 ##### `analysis` Object
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `summary` | String | A concise but complete narrative summary of the call (4-8 sentences) |
-| `keywords` | Array of Strings | 8-15 important keywords/short phrases from the call (products, topics, objections, competitors, etc.) |
-| `customer_sentiment` | String | One of: `"positive"`, `"neutral"`, `"negative"`, `"mixed"` |
-| `call_outcome` | String | Short label for how the call ended (e.g., "Demo scheduled", "Not interested", "Needs follow-up", "Deal closed", "No answer/voicemail") |
-| `customer_pain_points` | Array of Strings | Problems, needs, or goals the customer expressed |
-| `objections_raised` | Array of Strings | Objections, hesitations, or concerns raised by the customer |
-| `products_services_discussed` | Array of Strings | Products, services, plans, or prices discussed on the call |
-| `action_items` | Array of Strings | Concrete action items or commitments made by either side |
-| `follow_up_required` | Boolean | Whether a follow-up call or action is needed |
-| `follow_up_notes` | String or null | When/what the follow-up should be about |
-| `important_notes` | String or null | Anything else important for the sales rep |
+| Field                           | Type             | Description                                                                                                                            |
+| ------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `summary`                     | String           | A concise but complete narrative summary of the call (4-8 sentences)                                                                   |
+| `keywords`                    | Array of Strings | 8-15 important keywords/short phrases from the call (products, topics, objections, competitors, etc.)                                  |
+| `customer_sentiment`          | String           | One of:`"positive"`, `"neutral"`, `"negative"`, `"mixed"`                                                                      |
+| `call_outcome`                | String           | Short label for how the call ended (e.g., "Demo scheduled", "Not interested", "Needs follow-up", "Deal closed", "No answer/voicemail") |
+| `customer_pain_points`        | Array of Strings | Problems, needs, or goals the customer expressed                                                                                       |
+| `objections_raised`           | Array of Strings | Objections, hesitations, or concerns raised by the customer                                                                            |
+| `products_services_discussed` | Array of Strings | Products, services, plans, or prices discussed on the call                                                                             |
+| `action_items`                | Array of Strings | Concrete action items or commitments made by either side                                                                               |
+| `follow_up_required`          | Boolean          | Whether a follow-up call or action is needed                                                                                           |
+| `follow_up_notes`             | String or null   | When/what the follow-up should be about                                                                                                |
+| `important_notes`             | String or null   | Anything else important for the sales rep                                                                                              |
 
 ##### `token_usage` Object
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `input_tokens` | Integer | Tokens consumed by the prompt + audio input |
-| `output_tokens` | Integer | Tokens generated in the response |
-| `total_tokens` | Integer | input_tokens + output_tokens |
-| `audio_tokens` | Integer or null | Portion of input_tokens attributable to the audio itself |
+| Field             | Type            | Description                                              |
+| ----------------- | --------------- | -------------------------------------------------------- |
+| `input_tokens`  | Integer         | Tokens consumed by the prompt + audio input              |
+| `output_tokens` | Integer         | Tokens generated in the response                         |
+| `total_tokens`  | Integer         | input_tokens + output_tokens                             |
+| `audio_tokens`  | Integer or null | Portion of input_tokens attributable to the audio itself |
 
 ---
 
@@ -232,14 +233,14 @@ import requests
 
 def analyze_call(audio_file_path: str, language: str = "en", **kwargs):
     """Analyze a call recording using the Recording Analysis API."""
-    
+  
     url = "http://localhost:8000/crm/analyze-call"
-    
+  
     with open(audio_file_path, "rb") as f:
         files = {"audio_file": f}
         data = {"language": language}
         data.update(kwargs)
-        
+      
         response = requests.post(url, files=files, data=data)
         response.raise_for_status()
         return response.json()
@@ -308,10 +309,10 @@ analyzeCall('call_recording.mp3', 'en', {
 
 The API requires the following environment variables:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `GOOGLE_API_KEY` | Yes | - | Google API key for Gemini access |
-| `GEMINI_MODEL` | No | `gemini-3.1-flash-lite` | Gemini model to use |
-| `FILE_PROCESSING_POLL_INTERVAL_SEC` | No | `2.0` | Polling interval for file processing |
-| `FILE_PROCESSING_TIMEOUT_SEC` | No | `120.0` | Timeout for file processing |
-| `MAX_AUDIO_SIZE_MB` | No | `200` | Maximum audio file size in MB |
+| Variable                              | Required | Default                   | Description                          |
+| ------------------------------------- | -------- | ------------------------- | ------------------------------------ |
+| `GOOGLE_API_KEY`                    | Yes      | -                         | Google API key for Gemini access     |
+| `GEMINI_MODEL`                      | No       | `gemini-3.1-flash-lite` | Gemini model to use                  |
+| `FILE_PROCESSING_POLL_INTERVAL_SEC` | No       | `2.0`                   | Polling interval for file processing |
+| `FILE_PROCESSING_TIMEOUT_SEC`       | No       | `120.0`                 | Timeout for file processing          |
+| `MAX_AUDIO_SIZE_MB`                 | No       | `200`                   | Maximum audio file size in MB        |
