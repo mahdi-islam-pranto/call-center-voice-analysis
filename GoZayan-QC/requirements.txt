@@ -1,0 +1,16 @@
+fastapi
+pydantic
+langchain-google-genai
+langchain-core
+python-dotenv
+uvicorn
+httpx
+python-multipart
+mutagen
+
+# frontend - requirements
+streamlit
+requests
+plotly
+pandas
+openpyxl
