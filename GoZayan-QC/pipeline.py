@@ -391,7 +391,7 @@ def build_call_result(
         usage=usage,
     )
 
-
+# Evaluates a single call and returns the result.
 async def evaluate_call(call_id: str, audio: AudioSource, double_check: bool = False) -> CallResult:
     forensics, usage = await run_forensics(audio)
     passes = [run_scoring(audio, forensics)] + ([run_scoring(audio, forensics)] if double_check else [])

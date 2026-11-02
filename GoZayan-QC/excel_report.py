@@ -104,8 +104,8 @@ def _summary_sheet(ws, report: dict, generated_at: datetime):
         ("Calls needing review", sum(c.get("needs_review", False) for c in calls)),
         ("Calls reviewed by QA", sum(c.get("reviewed", False) for c in calls)),
         ("Critical errors", sum(len(c.get("critical_errors") or []) for c in calls)),
-        ("Could not evaluate", "\n".join(f"{k}: {v}" for k, v in (report.get("failed") or {}).items()) or "None"),
-        ("Models", ", ".join(f"{k}: {v}" for k, v in (report.get("models") or {}).items())),
+        ("Could not evaluate", "\n".join(f"{k}: {v}" for k, v in (report.get("failed") or {}).items()) or "None")
+        # ("Models", ", ".join(f"{k}: {v}" for k, v in (report.get("models") or {}).items())),
     ]
     for i, (label, value) in enumerate(info, start=3):
         _set(ws, i, 1, label, font=LABEL_FONT)

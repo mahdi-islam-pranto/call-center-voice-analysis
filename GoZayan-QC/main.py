@@ -49,7 +49,7 @@ class JobCreated(BaseModel):
     job_id: str
     total: int
 
-
+# Collects and validates the input files, agent names, and URLs.
 async def _collect_inputs(
     files: List[UploadFile], agent_names: List[str], urls: List[str]
 ) -> tuple[list[AudioSource], dict[str, str]]:

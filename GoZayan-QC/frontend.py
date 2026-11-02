@@ -69,7 +69,7 @@ if CFG:
         for p in CFG["parameters"]:
             st.markdown(f"**{p['name']}**  \n{p['question']}")
         st.caption(f"N/A policy: {CFG['na_policy']} · Pass mark: {CFG['pass_mark']}/10 · Critical errors: {CFG['critical_error_policy']}")
-        st.caption(f"Models: {', '.join(f'{k}: {v}' for k, v in CFG['models'].items())}")
+        # st.caption(f"Models: {', '.join(f'{k}: {v}' for k, v in CFG['models'].items())}")
 
 st.session_state.setdefault("reviews", {})
 
@@ -378,8 +378,8 @@ with tab_export:
         writer.writerow([c["file_name"], c["agent_name"], *[p["final_rating"] for p in c["parameters"]]])
     st.download_button(f"Download QA labels CSV ({len(reviewed)} reviewed calls)", data=buffer.getvalue().encode("utf-8-sig"),
                        file_name=f"gozayaan_qa_labels_{stamp}.csv", mime="text/csv", disabled=not reviewed)
-    st.caption("Final human-confirmed ratings of the calls you reviewed. Use it with "
-               "`python evaluate_against_human.py --report <json> --human <csv>` to measure AI vs human agreement.")
+    # st.caption("Final human-confirmed ratings of the calls you reviewed. Use it with "
+    #            "`python evaluate_against_human.py --report <json> --human <csv>` to measure AI vs human agreement.")
 
     if report.get("usage"):
         u = report["usage"]
