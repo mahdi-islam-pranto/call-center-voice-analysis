@@ -1,7 +1,5 @@
 fastapi
 uvicorn
-google-cloud-speech
-google-cloud-storage
 python-decouple
 pydantic
 requests
