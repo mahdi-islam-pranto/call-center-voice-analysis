@@ -1,8 +1,8 @@
 """
 Customer Call Transcript Generator
 
-POST /transcribe with a call recording URL -> the audio is downloaded, sent to
-an LLM through LangChain (Gemini 3.1 Flash-Lite by default), and the transcript
+POST /transcribe with a call recording URL or an uploaded audio file -> the
+audio is sent to an LLM through LangChain (Gemini 3.1 Flash-Lite by default), and the transcript
 is returned split into what the agent said and what the customer said, together
 with the token usage and cost of the request.
 
@@ -17,7 +17,7 @@ import os
 import time
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Literal, Optional
+from typing import Awaitable, Callable, Literal, Optional
 from urllib.parse import unquote, urlparse
 
 import httpx
@@ -31,11 +31,11 @@ from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.wave import WAVE
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, TypeAdapter, ValidationError
 
 from prompts import TRANSCRIPT_SYSTEM_PROMPT, TRANSCRIPT_USER_PROMPT
 
@@ -125,7 +125,7 @@ class TokenUsage(BaseModel):
 
 
 class TranscriptResponse(BaseModel):
-    audio_url: str
+    audio_url: Optional[str] = Field(description="The URL the audio came from; null when a file was uploaded.")
     file_name: str
     mime_type: str
     size_bytes: int
@@ -222,14 +222,15 @@ def _sniff_mime_type(data: bytes) -> Optional[str]:
     return None
 
 
-def _detect_mime_type(data: bytes, url: str, content_type: str) -> Optional[str]:
+def _detect_mime_type(data: bytes, name: str, content_type: str) -> Optional[str]:
+    """Format from the bytes first, then the content-type, then the extension of `name` (a file name or URL path)."""
     sniffed = _sniff_mime_type(data)
     if sniffed:
         return sniffed
     content_type = content_type.split(";")[0].strip().lower()
     if content_type.startswith("audio/"):
         return content_type
-    return AUDIO_EXTENSIONS.get(os.path.splitext(urlparse(url).path)[1].lower())
+    return AUDIO_EXTENSIONS.get(os.path.splitext(name)[1].lower())
 
 
 async def download_audio(url: str) -> DownloadedAudio:
@@ -255,14 +256,20 @@ async def download_audio(url: str) -> DownloadedAudio:
 
                 final_url = str(resp.url)
                 content_type = resp.headers.get("content-type", "")
+    except httpx.ConnectTimeout as e:
+        host = urlparse(url).hostname
+        raise DownloadError(
+            f"Could not connect to {host} within 10 seconds. The server running this API cannot reach "
+            f"{host}: check its network, firewall / IP whitelist on the recording server, or VPN."
+        ) from e
     except httpx.HTTPError as e:
-        raise DownloadError(f"Could not download the audio: {e.__class__.__name__}: {e}") from e
+        raise DownloadError(f"Could not download the audio: {e.__class__.__name__}: {e or 'no details'}") from e
 
     data = b"".join(chunks)
     if not data:
         raise DownloadError("The audio URL returned an empty file.")
 
-    mime_type = _detect_mime_type(data, final_url, content_type)
+    mime_type = _detect_mime_type(data, urlparse(final_url).path, content_type)
     if not mime_type:
         raise DownloadError(
             f"The URL did not return an audio file (content-type: {content_type or 'unknown'}). "
@@ -270,6 +277,31 @@ async def download_audio(url: str) -> DownloadedAudio:
         )
 
     file_name = unquote(os.path.basename(urlparse(final_url).path)) or "audio"
+    return DownloadedAudio(
+        file_name=file_name, mime_type=mime_type, data=data, duration_seconds=measure_duration(data, mime_type)
+    )
+
+
+async def read_upload(upload: UploadFile) -> DownloadedAudio:
+    """Reads an uploaded file into memory, enforcing the size limit, and checks that it is audio."""
+    max_bytes = MAX_AUDIO_MB * 1024 * 1024
+    chunks, size = [], 0
+    while chunk := await upload.read(1024 * 1024):
+        size += len(chunk)
+        if size > max_bytes:
+            raise DownloadError(f"The audio is larger than the {MAX_AUDIO_MB} MB limit.")
+        chunks.append(chunk)
+
+    data = b"".join(chunks)
+    if not data:
+        raise DownloadError("The uploaded file is empty.")
+
+    file_name = os.path.basename(upload.filename or "") or "audio"
+    mime_type = _detect_mime_type(data, file_name, upload.content_type or "")
+    if not mime_type:
+        raise DownloadError(
+            f"The uploaded file is not a supported audio file ({', '.join(AUDIO_EXTENSIONS)})."
+        )
     return DownloadedAudio(
         file_name=file_name, mime_type=mime_type, data=data, duration_seconds=measure_duration(data, mime_type)
     )
@@ -394,7 +426,7 @@ def split_transcript(segments: list[Segment]) -> SplitTranscript:
 app = FastAPI(
     title="Customer Call Transcript Generator",
     description=(
-        "Downloads a call recording from a URL and returns separate Agent and Customer transcripts "
+        "Takes a call recording (URL or uploaded file) and returns separate Agent and Customer transcripts "
         "generated by an LLM via LangChain, with token usage and cost."
     ),
     version="1.0.0",
@@ -409,11 +441,13 @@ class TranscriptionError(Exception):
 _concurrency = asyncio.Semaphore(MAX_CONCURRENCY)
 
 
-async def process_url(audio_url: str) -> TranscriptResponse:
-    """Download + transcribe one URL. Raises DownloadError or TranscriptionError."""
+async def process_audio(
+    load_audio: Callable[[], Awaitable[DownloadedAudio]], audio_url: Optional[str] = None
+) -> TranscriptResponse:
+    """Load (download or read upload) + transcribe one recording. Raises DownloadError or TranscriptionError."""
     started = time.perf_counter()
     async with _concurrency:
-        audio = await download_audio(audio_url)
+        audio = await load_audio()
         try:
             result, usage = await transcribe_audio(audio)
         except Exception as e:
@@ -434,15 +468,53 @@ async def process_url(audio_url: str) -> TranscriptResponse:
     )
 
 
+async def process_url(audio_url: str) -> TranscriptResponse:
+    return await process_audio(lambda: download_audio(audio_url), audio_url)
+
+
+_http_url = TypeAdapter(HttpUrl)
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "model": LLM_MODEL}
 
 
 @app.post("/transcribe", response_model=TranscriptResponse)
-async def transcribe(request: TranscriptRequest):
+async def transcribe(
+    request: Request,
+    audio_url: Optional[str] = Form(None, description="Direct link to the audio file. Send this OR audio_file."),
+    audio_file: Optional[UploadFile] = File(None, description="The audio file itself. Send this OR audio_url."),
+):
+    """
+    Send the recording as multipart/form-data with either `audio_url` or `audio_file`.
+    A JSON body {"audio_url": "..."} is also still accepted.
+    """
+    # JSON body (the original request format).
+    if request.headers.get("content-type", "").startswith("application/json"):
+        try:
+            body = TranscriptRequest.model_validate(await request.json())
+        except (ValueError, ValidationError) as e:
+            raise HTTPException(status_code=422, detail=f"Invalid JSON body: {e}")
+        audio_url = str(body.audio_url)
+
+    audio_url = (audio_url or "").strip() or None
+    if audio_file is not None and not audio_file.filename:
+        audio_file = None  # an empty file field (e.g. left blank in Swagger UI)
+
+    if audio_url and audio_file:
+        raise HTTPException(status_code=400, detail="Send either audio_url or audio_file, not both.")
+    if not audio_url and not audio_file:
+        raise HTTPException(status_code=400, detail="Send an audio_url or upload an audio_file.")
+
     try:
-        return await process_url(str(request.audio_url))
+        if audio_file:
+            return await process_audio(lambda: read_upload(audio_file))
+        try:
+            audio_url = str(_http_url.validate_python(audio_url))
+        except ValidationError:
+            raise HTTPException(status_code=400, detail="audio_url is not a valid http(s) URL.")
+        return await process_url(audio_url)
     except DownloadError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except TranscriptionError as e:

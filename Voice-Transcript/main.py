@@ -186,8 +186,14 @@ async def download_audio(url: str) -> DownloadedAudio:
 
                 final_url = str(resp.url)
                 content_type = resp.headers.get("content-type", "")
+    except httpx.ConnectTimeout as e:
+        host = urlparse(url).hostname
+        raise DownloadError(
+            f"Could not connect to {host} within 10 seconds. The server running this API cannot reach "
+            f"{host}: check its network, firewall / IP whitelist on the recording server, or VPN."
+        ) from e
     except httpx.HTTPError as e:
-        raise DownloadError(f"Could not download the audio: {e.__class__.__name__}: {e}") from e
+        raise DownloadError(f"Could not download the audio: {e.__class__.__name__}: {e or 'no details'}") from e
 
     data = b"".join(chunks)
     if not data:

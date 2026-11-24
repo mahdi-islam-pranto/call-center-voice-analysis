@@ -7,3 +7,4 @@ langchain
 langchain-core
 langchain-google-genai
 mutagen
+python-multipart
